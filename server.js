@@ -20,10 +20,10 @@ app.use(express.static(path.join(__dirname, '../frontend')));
 
 // Configuração do banco de dados
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'invest_dashboard',
+  host: '108.179.253.27',
+  user: 'mar11704_diegosabino',
+  password: 'wM96jpk6JsKpFMh',
+  database: 'mar11704_id',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
@@ -39,7 +39,7 @@ const authenticateToken = (req, res, next) => {
   
   if (!token) return res.status(401).json({ message: 'Token não fornecido' });
   
-  jwt.verify(token, process.env.JWT_SECRET || 'invest_dashboard_secret', (err, user) => {
+  jwt.verify(token, 'invest_dashboard_secret', (err, user) => {
     if (err) return res.status(403).json({ message: 'Token inválido' });
     req.user = user;
     next();
@@ -74,7 +74,7 @@ app.post('/api/register', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { id: result.insertId, name, email },
-      process.env.JWT_SECRET || 'invest_dashboard_secret',
+      'invest_dashboard_secret',
       { expiresIn: '24h' }
     );
     
@@ -115,7 +115,7 @@ app.post('/api/login', async (req, res) => {
     // Gerar token JWT
     const token = jwt.sign(
       { id: user.id, name: user.name, email: user.email },
-      process.env.JWT_SECRET || 'invest_dashboard_secret',
+      'invest_dashboard_secret',
       { expiresIn: '24h' }
     );
     
