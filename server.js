@@ -11,7 +11,10 @@ require('dotenv').config();
 
 // Configuração do app Express
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: ['https://diegosabino.com.br', 'https://www.diegosabino.com.br'],
+  credentials: true
+}));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
