@@ -1,19 +1,21 @@
 // Arquivo para inicialização do banco de dados
-const mysql = require('mysql2/promise');
-require('dotenv').config();
+const mysql = require("mysql2/promise");
+require("dotenv").config();
 
-// Configuração do banco de dados
+// Configuração do banco de dados (usar as mesmas variáveis de ambiente do server.js)
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  host: process.env.DB_HOST || "108.179.253.27", // Alinhado com server.js
+  user: process.env.DB_USER || "mar11704_diegosabino", // Alinhado com server.js
+  password: process.env.DB_PASSWORD || "wM96jpk6JsKpFMh", // Alinhado com server.js
   multipleStatements: true // Permitir múltiplas queries em uma única execução
 };
 
+const DB_NAME_INIT = process.env.DB_NAME || "mar11704_id"; // Alinhado com server.js
+
 // SQL para criar o banco de dados e tabelas
 const setupSQL = `
-CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'invest_dashboard'};
-USE ${process.env.DB_NAME || 'invest_dashboard'};
+CREATE DATABASE IF NOT EXISTS ${DB_NAME_INIT};
+USE ${DB_NAME_INIT};
 
 -- Tabela de Usuários
 CREATE TABLE IF NOT EXISTS users (
@@ -30,23 +32,23 @@ CREATE TABLE IF NOT EXISTS investment_categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(50) NOT NULL,
     description VARCHAR(255),
-    is_foreign BOOLEAN DEFAULT FALSE,
+    is_foreign BOOLEAN DEFAULT FALSE, -- Indica se a categoria é tipicamente em moeda estrangeira (ex: USD)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- Inserção das categorias padrão (apenas se a tabela estiver vazia)
-INSERT INTO investment_categories (name, description, is_foreign)
+INSERT INTO investment_categories (id, name, description, is_foreign)
 SELECT * FROM (
-    SELECT 'Ações BR' as name, 'Ações de empresas brasileiras' as description, FALSE as is_foreign
-    UNION SELECT 'Ações US', 'Ações de empresas americanas', TRUE
-    UNION SELECT 'FIIs', 'Fundos de Investimento Imobiliário', FALSE
-    UNION SELECT 'Renda Fixa', 'Investimentos de renda fixa como CDBs, Tesouro Direto, etc', FALSE
-    UNION SELECT 'Cripto', 'Criptomoedas', FALSE
+    SELECT 1 as id, 'Ações BR' as name, 'Ações de empresas brasileiras' as description, FALSE as is_foreign
+    UNION SELECT 2, 'Ações US', 'Ações de empresas americanas', TRUE
+    UNION SELECT 3, 'FIIs', 'Fundos de Investimento Imobiliário', FALSE
+    UNION SELECT 4, 'Renda Fixa', 'Investimentos de renda fixa como CDBs, Tesouro Direto, etc', FALSE
+    UNION SELECT 5, 'Cripto', 'Criptomoedas', TRUE -- Criptos são consideradas em USD para conversão
 ) AS tmp
 WHERE NOT EXISTS (
-    SELECT name FROM investment_categories
-) LIMIT 1;
+    SELECT 1 FROM investment_categories WHERE id IN (1,2,3,4,5)
+);
 
 -- Tabela de Investimentos
 CREATE TABLE IF NOT EXISTS investments (
@@ -55,11 +57,12 @@ CREATE TABLE IF NOT EXISTS investments (
     category_id INT NOT NULL,
     ticker VARCHAR(20) NOT NULL,
     name VARCHAR(100) NOT NULL,
-    quantity DECIMAL(15,6) NOT NULL,
-    purchase_price DECIMAL(15,2) NOT NULL,
+    quantity DECIMAL(20,8) NOT NULL, -- Aumentada precisão para cripto
+    purchase_price DECIMAL(20,8) NOT NULL, -- Aumentada precisão para cripto
     purchase_date DATE NOT NULL,
-    current_price DECIMAL(15,2),
-    last_update TIMESTAMP,
+    exchange_rate DECIMAL(15,6) NULL, -- Taxa de câmbio no momento da compra (para ativos em moeda estrangeira)
+    current_price DECIMAL(20,8) NULL, -- Preço atual do ativo (na moeda original)
+    last_update TIMESTAMP NULL, -- Última atualização do current_price
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -67,23 +70,23 @@ CREATE TABLE IF NOT EXISTS investments (
     FOREIGN KEY (category_id) REFERENCES investment_categories(id)
 );
 
--- Tabela de Histórico de Preços
+-- Tabela de Histórico de Preços (Opcional, não implementada nas rotas atuais)
 CREATE TABLE IF NOT EXISTS price_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     investment_id INT NOT NULL,
-    price DECIMAL(15,2) NOT NULL,
+    price DECIMAL(20,8) NOT NULL,
     date TIMESTAMP NOT NULL,
     FOREIGN KEY (investment_id) REFERENCES investments(id) ON DELETE CASCADE
 );
 
--- Tabela de Taxas de Câmbio
+-- Tabela de Taxas de Câmbio (Opcional, Yahoo Finance é usado diretamente por enquanto)
 CREATE TABLE IF NOT EXISTS exchange_rates (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    from_currency VARCHAR(3) NOT NULL,
-    to_currency VARCHAR(3) NOT NULL,
+    from_currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    to_currency VARCHAR(3) NOT NULL DEFAULT 'BRL',
     rate DECIMAL(15,6) NOT NULL,
     date TIMESTAMP NOT NULL,
-    INDEX (from_currency, to_currency, date)
+    UNIQUE KEY (from_currency, to_currency, date)
 );
 `;
 
@@ -92,29 +95,38 @@ async function initializeDatabase() {
   let connection;
   
   try {
-    console.log('Conectando ao MySQL...');
+    console.log(`Conectando ao MySQL em ${dbConfig.host} para inicialização...`);
     connection = await mysql.createConnection(dbConfig);
     
-    console.log('Executando script de inicialização...');
+    console.log(`Executando script de inicialização no banco de dados ${DB_NAME_INIT}...`);
     await connection.query(setupSQL);
     
-    console.log('Banco de dados inicializado com sucesso!');
+    console.log("Banco de dados inicializado com sucesso!");
   } catch (error) {
-    console.error('Erro ao inicializar o banco de dados:', error);
-    throw error;
+    console.error("Erro ao inicializar o banco de dados:", error);
+    // Não lançar erro aqui para permitir que o servidor inicie mesmo se o DB já existir / falhar a init
+    // O servidor tentará se conectar com o pool de qualquer maneira.
   } finally {
     if (connection) {
       await connection.end();
-      console.log('Conexão encerrada.');
+      console.log("Conexão de inicialização encerrada.");
     }
   }
 }
 
 // Executar a inicialização se este arquivo for executado diretamente
-if (require.main === module) {
+// E apenas se uma variável de ambiente específica for definida, para evitar execuções acidentais
+if (require.main === module && process.env.RUN_DB_INIT === "true") {
   initializeDatabase()
     .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+    .catch((err) => {
+        console.error("Falha crítica na inicialização do DB:", err);
+        process.exit(1);
+    });
+} else if (require.main === module) {
+    console.log("Para executar a inicialização do banco de dados, defina a variável de ambiente RUN_DB_INIT=true");
+    process.exit(0);
 }
 
 module.exports = { initializeDatabase };
+
