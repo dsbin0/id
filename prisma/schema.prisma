@@ -1,0 +1,64 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // Changed from mysql to postgresql
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password_hash String
+  created_at    DateTime @default(now())
+  assets        Asset[]
+}
+
+enum CategoryName {
+  ACOES_BR
+  FIIS
+  RENDA_FIXA
+  ACOES_US
+  CRYPTO
+}
+
+model Category {
+  id     String       @id @default(cuid())
+  name   CategoryName @unique
+  assets Asset[]
+}
+
+enum Currency {
+  BRL
+  USD
+}
+
+model Asset {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  categoryId  String
+  ticker      String
+  quantity    Float    // Prisma maps Float to DoublePrecision in PostgreSQL
+  currency    Currency
+  created_at  DateTime @default(now())
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([ticker])
+}
+
+model Price {
+  id         String   @id @default(cuid())
+  ticker     String   @unique
+  currency   Currency
+  last_price Float    // Prisma maps Float to DoublePrecision in PostgreSQL
+  fetched_at DateTime @default(now()) @updatedAt
+}
+
